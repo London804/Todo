@@ -70,6 +70,36 @@ public class TodosController : ControllerBase
         return CreatedAtAction(nameof(GetTodo), new { id = todo.Id }, ToResponse(todo));
     }
 
+    // PUT /api/todos/5   { "title": "Buy oat milk" }
+    // PUT means "replace the editable state of this resource" — here, the title.
+    [HttpPut("{id:int}")]
+    public async Task<ActionResult<TodoResponse>> UpdateTodo(int id, UpdateTodoRequest request)
+    {
+        var todo = await _db.Todos.FindAsync(id);
+        if (todo is null)
+            return NotFound(); // 404 — can't edit something that doesn't exist
+
+        todo.Title = request.Title;   // only the client-editable field changes
+        await _db.SaveChangesAsync(); // EF Core detects the change and UPDATEs the row
+
+        return Ok(ToResponse(todo));
+    }
+
+    // DELETE /api/todos/5
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteTodo(int id)
+    {
+        var todo = await _db.Todos.FindAsync(id);
+        if (todo is null)
+            return NotFound();
+
+        _db.Todos.Remove(todo);       // stage the delete
+        await _db.SaveChangesAsync(); // run it — the row is gone from SQL Server
+
+        // 204 No Content: success, and there's nothing meaningful to return.
+        return NoContent();
+    }
+
     // POST /api/todos/5/complete
     [HttpPost("{id:int}/complete")]
     public async Task<ActionResult<TodoResponse>> CompleteTodo(int id)
