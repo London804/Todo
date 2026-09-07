@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using TodoApp.Api.Dtos;
 
@@ -19,6 +20,22 @@ public class TodosApiTests : IDisposable
     {
         _factory = new TodoAppFactory();
         _client = _factory.CreateClient();
+
+        // TodosController is [Authorize]d, so every test needs an authenticated
+        // client. Register a fresh user and attach its JWT as the bearer token.
+        // (Constructor can't be async, so we block on the setup call.)
+        AuthenticateAsync(_client, $"user_{Guid.NewGuid():N}@test.com", "Password123!")
+            .GetAwaiter().GetResult();
+    }
+
+    // Registers a new user and sets the returned JWT as the client's bearer token
+    // for all subsequent requests.
+    private static async Task AuthenticateAsync(HttpClient client, string email, string password)
+    {
+        var response = await client.PostAsJsonAsync("/api/auth/register", new { email, password });
+        response.EnsureSuccessStatusCode();
+        var auth = await response.Content.ReadFromJsonAsync<AuthResponse>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth!.Token);
     }
 
     public void Dispose()

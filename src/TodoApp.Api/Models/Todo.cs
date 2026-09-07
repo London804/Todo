@@ -22,4 +22,9 @@ public class Todo
 
     // Nullable (DateTime?) because an incomplete task has no completion time yet.
     public DateTime? CompletedAt { get; set; }
+
+    // The id of the ApplicationUser who owns this todo. Set by the server from
+    // the authenticated user's token — never from client input. Every query is
+    // filtered by this so users only ever see their own todos.
+    public string UserId { get; set; } = string.Empty;
 }

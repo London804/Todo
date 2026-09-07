@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using TodoApp.Api.Data;
@@ -22,6 +23,20 @@ public class TodoAppFactory : WebApplicationFactory<Program>
     {
         // Run under the Development environment so the app starts cleanly.
         builder.UseEnvironment("Testing");
+
+        // The JWT signing key lives in user secrets, which aren't loaded under the
+        // Testing environment. Supply a test key (and issuer/audience) in memory so
+        // token generation and validation work during tests.
+        builder.ConfigureAppConfiguration((_, config) =>
+        {
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:Key"] = "test-signing-key-that-is-long-enough-for-hmac-sha256",
+                ["Jwt:Issuer"] = "TodoApp.Tests",
+                ["Jwt:Audience"] = "TodoApp.Tests",
+                ["Jwt:ExpiryMinutes"] = "60",
+            });
+        });
 
         builder.ConfigureServices(services =>
         {

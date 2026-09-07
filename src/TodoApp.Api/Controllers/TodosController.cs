@@ -1,3 +1,6 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TodoApp.Api.Data;
@@ -8,6 +11,7 @@ namespace TodoApp.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")] // -> /api/todos
+[Authorize] // every action requires a valid JWT; anonymous callers get 401
 public class TodosController : ControllerBase
 {
     // Dependency Injection in action: we ask for an AppDbContext in the
@@ -20,14 +24,20 @@ public class TodosController : ControllerBase
         _db = db;
     }
 
+    // The current user's id, read from the "sub" claim of their JWT. Because the
+    // controller is [Authorize]d, we're guaranteed to have an authenticated user
+    // here. Every query below is scoped to this id so users only see their own data.
+    private string UserId => User.FindFirstValue(JwtRegisteredClaimNames.Sub)!;
+
     // GET /api/todos              -> active todos (not archived)
     // GET /api/todos?includeArchived=true -> everything
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TodoResponse>>> GetTodos(
         [FromQuery] bool includeArchived = false)
     {
-        // Build a query. Nothing hits the database until ToListAsync() runs.
-        var query = _db.Todos.AsQueryable();
+        // Build a query, scoped to the current user. Nothing hits the database
+        // until ToListAsync() runs.
+        var query = _db.Todos.Where(t => t.UserId == UserId);
 
         if (!includeArchived)
             query = query.Where(t => !t.IsArchived);
@@ -45,7 +55,7 @@ public class TodosController : ControllerBase
     [HttpGet("{id:int}")] // the ":int" constraint means /api/todos/abc won't match
     public async Task<ActionResult<TodoResponse>> GetTodo(int id)
     {
-        var todo = await _db.Todos.FindAsync(id);
+        var todo = await FindOwnedAsync(id);
         if (todo is null)
             return NotFound(); // 404
 
@@ -61,6 +71,7 @@ public class TodosController : ControllerBase
         {
             Title = request.Title,
             CreatedAt = DateTime.UtcNow, // server decides this, not the client
+            UserId = UserId,             // owner comes from the token, not the client
         };
 
         _db.Todos.Add(todo);      // stage the insert
@@ -75,9 +86,9 @@ public class TodosController : ControllerBase
     [HttpPut("{id:int}")]
     public async Task<ActionResult<TodoResponse>> UpdateTodo(int id, UpdateTodoRequest request)
     {
-        var todo = await _db.Todos.FindAsync(id);
+        var todo = await FindOwnedAsync(id);
         if (todo is null)
-            return NotFound(); // 404 — can't edit something that doesn't exist
+            return NotFound(); // 404 — can't edit something that doesn't exist (or isn't yours)
 
         todo.Title = request.Title;   // only the client-editable field changes
         await _db.SaveChangesAsync(); // EF Core detects the change and UPDATEs the row
@@ -89,7 +100,7 @@ public class TodosController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteTodo(int id)
     {
-        var todo = await _db.Todos.FindAsync(id);
+        var todo = await FindOwnedAsync(id);
         if (todo is null)
             return NotFound();
 
@@ -104,7 +115,7 @@ public class TodosController : ControllerBase
     [HttpPost("{id:int}/complete")]
     public async Task<ActionResult<TodoResponse>> CompleteTodo(int id)
     {
-        var todo = await _db.Todos.FindAsync(id);
+        var todo = await FindOwnedAsync(id);
         if (todo is null)
             return NotFound();
 
@@ -119,7 +130,7 @@ public class TodosController : ControllerBase
     [HttpPost("{id:int}/archive")]
     public async Task<ActionResult<TodoResponse>> ArchiveTodo(int id)
     {
-        var todo = await _db.Todos.FindAsync(id);
+        var todo = await FindOwnedAsync(id);
         if (todo is null)
             return NotFound();
 
@@ -128,6 +139,13 @@ public class TodosController : ControllerBase
 
         return Ok(ToResponse(todo));
     }
+
+    // Finds a todo by id BUT only if it belongs to the current user. This is the
+    // key to isolation: asking for someone else's todo returns null -> 404, so a
+    // user can't read or modify todos that aren't theirs (and can't even tell
+    // whether they exist).
+    private Task<Todo?> FindOwnedAsync(int id) =>
+        _db.Todos.FirstOrDefaultAsync(t => t.Id == id && t.UserId == UserId);
 
     // A tiny helper to convert a Todo entity into a TodoResponse DTO.
     private static TodoResponse ToResponse(Todo t) => new()
