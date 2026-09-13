@@ -39,7 +39,13 @@ public class AuthController : ControllerBase
         {
             // Surface Identity's validation messages (e.g. "email already taken").
             foreach (var error in result.Errors)
+            {
+                // We use the email as the username, so a duplicate username is the
+                // same fact as a duplicate email — skip the redundant message.
+                if (error.Code == nameof(IdentityErrorDescriber.DuplicateUserName))
+                    continue;
                 ModelState.AddModelError(error.Code, error.Description);
+            }
             return ValidationProblem(ModelState); // 400 with details
         }
 

@@ -90,6 +90,20 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+// CORS lets a browser frontend served from a different origin call this API.
+// In local dev the Vite proxy makes calls same-origin so CORS isn't exercised,
+// but it's needed once the frontend is deployed on its own origin. Allowed
+// origins come from the "Cors:AllowedOrigins" config array (defaulting to the
+// Vite dev server).
+const string CorsPolicy = "Frontend";
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? new[] { "http://localhost:5173" };
+builder.Services.AddCors(options =>
+    options.AddPolicy(CorsPolicy, policy =>
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod()));
+
 var app = builder.Build();
 
 // First in the pipeline so it wraps everything below and catches any exception
@@ -118,6 +132,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// CORS must come before authentication/authorization so preflight (OPTIONS)
+// requests get the right headers.
+app.UseCors(CorsPolicy);
 
 // Order matters: authentication (who are you?) must run before authorization
 // (are you allowed?). Both go after routing and before MapControllers.
