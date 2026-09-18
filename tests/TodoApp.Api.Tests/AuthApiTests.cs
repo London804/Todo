@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.Extensions.DependencyInjection;
 using TodoApp.Api.Dtos;
 
 namespace TodoApp.Api.Tests;
@@ -115,5 +116,80 @@ public class AuthApiTests : IDisposable
         // ...and B cannot fetch A's todo directly (404, not 403 — we don't reveal existence).
         var bGet = await clientB.GetAsync($"/api/todos/{todoA.Id}");
         Assert.Equal(HttpStatusCode.NotFound, bGet.StatusCode);
+    }
+
+    // --- password reset ---
+
+    // Pulls the reset token out of the link in the captured email body.
+    private string GetResetTokenFromEmail()
+    {
+        var sender = _factory.Services.GetRequiredService<CapturingEmailSender>();
+        var body = sender.Sent.Single().Body;
+        const string marker = "token=";
+        return Uri.UnescapeDataString(body[(body.IndexOf(marker) + marker.Length)..].Trim());
+    }
+
+    [Fact]
+    public async Task ForgotPassword_UnknownEmail_ReturnsOkAndSendsNothing()
+    {
+        var client = _factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/api/auth/forgot-password",
+            new { email = "nobody@test.com" });
+
+        // Always 200 (no account enumeration), and no email is actually sent.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var sender = _factory.Services.GetRequiredService<CapturingEmailSender>();
+        Assert.Empty(sender.Sent);
+    }
+
+    [Fact]
+    public async Task ForgotPassword_KnownEmail_SendsResetEmail()
+    {
+        var client = _factory.CreateClient();
+        await RegisterAsync(client, "forgot@test.com");
+
+        var response = await client.PostAsJsonAsync("/api/auth/forgot-password",
+            new { email = "forgot@test.com" });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var sender = _factory.Services.GetRequiredService<CapturingEmailSender>();
+        var email = Assert.Single(sender.Sent);
+        Assert.Equal("forgot@test.com", email.To);
+        Assert.Contains("token=", email.Body);
+    }
+
+    [Fact]
+    public async Task ResetPassword_WithValidToken_ChangesPassword()
+    {
+        var client = _factory.CreateClient();
+        await RegisterAsync(client, "reset@test.com", "OldPassword123!");
+
+        // Kick off the reset and grab the token from the "email".
+        await client.PostAsJsonAsync("/api/auth/forgot-password", new { email = "reset@test.com" });
+        var token = GetResetTokenFromEmail();
+
+        var reset = await client.PostAsJsonAsync("/api/auth/reset-password",
+            new { email = "reset@test.com", token, newPassword = "NewPassword123!" });
+        Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+
+        // Old password no longer works; new one does.
+        var oldLogin = await client.PostAsJsonAsync("/api/auth/login",
+            new { email = "reset@test.com", password = "OldPassword123!" });
+        Assert.Equal(HttpStatusCode.Unauthorized, oldLogin.StatusCode);
+
+        var newLogin = await client.PostAsJsonAsync("/api/auth/login",
+            new { email = "reset@test.com", password = "NewPassword123!" });
+        Assert.Equal(HttpStatusCode.OK, newLogin.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResetPassword_WithInvalidToken_ReturnsBadRequest()
+    {
+        var client = _factory.CreateClient();
+        await RegisterAsync(client, "badtoken@test.com");
+
+        var reset = await client.PostAsJsonAsync("/api/auth/reset-password",
+            new { email = "badtoken@test.com", token = "not-a-real-token", newPassword = "NewPassword123!" });
+        Assert.Equal(HttpStatusCode.BadRequest, reset.StatusCode);
     }
 }

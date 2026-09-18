@@ -52,11 +52,21 @@ builder.Services
         options.Password.RequiredLength = 8;
         options.User.RequireUniqueEmail = true;
     })
-    .AddEntityFrameworkStores<AppDbContext>();
+    .AddEntityFrameworkStores<AppDbContext>()
+    // Registers the token providers used to generate/validate tokens such as the
+    // password-reset token (GeneratePasswordResetTokenAsync). Without this, reset
+    // token generation throws "No token provider named 'Default' is registered".
+    .AddDefaultTokenProviders();
 
 // Bind the "Jwt" config section to JwtSettings, and register our token service.
 builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection(JwtSettings.SectionName));
 builder.Services.AddScoped<TokenService>();
+
+// Email delivery over SMTP (MailKit). Configured by the "Email" section — points
+// at the local Mailpit container in dev, or a real provider in production.
+// (LoggingEmailSender remains available as a no-infrastructure fallback.)
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection(EmailSettings.SectionName));
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 
 // JWT bearer authentication: validates the "Authorization: Bearer <token>" header
 // on incoming requests.

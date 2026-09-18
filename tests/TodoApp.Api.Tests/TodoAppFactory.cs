@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using TodoApp.Api.Auth;
 using TodoApp.Api.Data;
 
 namespace TodoApp.Api.Tests;
@@ -50,6 +51,13 @@ public class TodoAppFactory : WebApplicationFactory<Program>
             // ...and replace it with the InMemory provider.
             services.AddDbContext<AppDbContext>(options =>
                 options.UseInMemoryDatabase(_dbName));
+
+            // Replace the real email sender with a capturing one so tests can read
+            // the reset link/token. Registered as a singleton and aliased to
+            // IEmailSender so both resolve to the same instance.
+            services.RemoveAll<IEmailSender>();
+            services.AddSingleton<CapturingEmailSender>();
+            services.AddSingleton<IEmailSender>(sp => sp.GetRequiredService<CapturingEmailSender>());
         });
     }
 }

@@ -14,6 +14,10 @@ export function LoginPage() {
       onSuccess={() => navigate('/')}
       footer={
         <>
+          <Link to="/forgot-password" className="text-blue-600 hover:underline">
+            Forgot password?
+          </Link>
+          <br />
           No account?{' '}
           <Link to="/register" className="text-blue-600 hover:underline">
             Register

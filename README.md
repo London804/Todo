@@ -120,12 +120,38 @@ The token in Swagger is remembered for the page session; refreshing the page
 clears it, so you'd re-Authorize. Tokens expire after `ExpiryMinutes` (default 60),
 after which you log in again for a fresh one.
 
+### Password reset & email (Mailpit)
+
+Email is sent over SMTP (MailKit). Locally, a **Mailpit** container catches it and
+shows it in a web inbox — no real email leaves your machine. Start it once:
+
+```bash
+docker run -d --name todo-mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit
+```
+
+Then use **Forgot password** in the app and open the inbox at
+**http://localhost:8025** to click the reset link. SMTP settings live in the
+`Email` config section (dev defaults point at Mailpit: `localhost:1025`, no TLS,
+no credentials).
+
+**In production:** point the same `Email` config at one outbound mail provider your
+app uses to send (SendGrid/Mailgun/SES/SMTP): set `Host`/`Port`, `UseStartTls:
+true`, and put **your app's provider credentials** in secrets — i.e.
+`Username`/`Password` are your application's login (often `apikey` + an API key) to
+that one sending service, **not** any recipient's email account. Your app connects
+to that one provider, which then delivers to each recipient's own email host. These
+credentials can send mail as your domain, so they belong in secrets/env vars/a key
+vault — never in `appsettings.json`. The code doesn't change between dev and prod —
+only config. The reset link points at `Frontend:BaseUrl`.
+
 ## API endpoints
 
 | Method | Route | Auth | Purpose |
 |--------|-------|------|---------|
 | POST | `/api/auth/register` | — | Create an account, returns a JWT |
 | POST | `/api/auth/login` | — | Log in, returns a JWT |
+| POST | `/api/auth/forgot-password` | — | Email a password-reset link (always returns 200) |
+| POST | `/api/auth/reset-password` | — | Set a new password using the emailed token |
 | GET | `/api/todos` | ✔ | List active todos (`?includeArchived=true` for all) |
 | GET | `/api/todos/{id}` | ✔ | Get one todo |
 | POST | `/api/todos` | ✔ | Create — body: `{ "title": "..." }` |

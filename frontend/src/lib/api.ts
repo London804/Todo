@@ -84,6 +84,18 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
 
+  forgotPassword: (email: string) =>
+    request<{ message: string }>('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  resetPassword: (email: string, token: string, newPassword: string) =>
+    request<{ message: string }>('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, token, newPassword }),
+    }),
+
   // --- todos ---
   getTodos: (includeArchived = false) =>
     request<TodoResponse[]>(`/api/todos?includeArchived=${includeArchived}`),
