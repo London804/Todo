@@ -9,9 +9,8 @@ validation, structured logging, email, and integration testing.
 > the right way (secrets kept out of source, tests, clean error handling, etc.).
 
 ## Screenshots
-
-<img width="1797" height="1084" alt="Pasted Graphic 2" src="https://github.com/user-attachments/assets/72a77e55-8c6f-48af-867d-85353c5aee2b" />
-<img width="1796" height="1056" alt="Pasted Graphic 3" src="https://github.com/user-attachments/assets/0d813755-0211-4a81-9f89-92095b93541e" />
+<img width="1135" height="865" alt="Pasted Graphic 5" src="https://github.com/user-attachments/assets/b6940091-f247-4d8b-8d5a-d62dd5d5ec51" />
+<img width="1160" height="858" alt="My Todos" src="https://github.com/user-attachments/assets/25a548c0-d2eb-45cd-93a4-5be13fe1bd96" />
 
 
 
