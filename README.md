@@ -1,148 +1,131 @@
 # TodoApp
 
-A .NET 10 Web API for managing todos, backed by SQL Server via EF Core.
+A full-stack todo application built as a learning project — a **.NET 10 Web API**
+with a **React + TypeScript** frontend, covering authentication, per-user data,
+validation, structured logging, email, and integration testing.
 
-## Prerequisites
+> This is a personal project for learning modern full-stack development end to end.
+> It is intentionally not "production-polished," but it aims to do the fundamentals
+> the right way (secrets kept out of source, tests, clean error handling, etc.).
+
+## Screenshots
+
+> _Run the app (see below) and drop screenshots into `docs/screenshots/`, or ask
+> and I can help capture them. Suggested shots: login, the todo list, and the
+> password-reset email in Mailpit._
+
+## Features
+
+- **Authentication** — register / log in with JWT bearer tokens (ASP.NET Core Identity)
+- **Per-user data** — every todo is scoped to its owner; you only ever see your own
+- **Todos** — create, edit, complete, archive (soft-hide), delete, and a show-archived toggle
+- **Password reset** — forgot/reset flow with emailed reset links (no account enumeration)
+- **Email** — SMTP via MailKit; a local Mailpit inbox in dev, real providers in prod
+- **Validation** — data-annotation rules with clear, per-field error messages
+- **Error handling** — unhandled exceptions return clean `ProblemDetails`, details logged server-side
+- **Structured logging** — Serilog, one summary line per request
+- **API docs** — OpenAPI document + Swagger UI with a JWT "Authorize" button
+- **Tests** — xUnit integration tests over the real HTTP pipeline (25 passing)
+
+## Tech stack
+
+| Layer | Tech |
+|-------|------|
+| **Backend** | .NET 10, ASP.NET Core Web API, EF Core, SQL Server |
+| **Auth** | ASP.NET Core Identity, JWT bearer tokens |
+| **Frontend** | React, TypeScript, Vite, Tailwind CSS v4 |
+| **Data/state** | TanStack Query (server state), React Router, React Context (auth) |
+| **Email** | MailKit (SMTP), Mailpit (local inbox) |
+| **Logging / docs** | Serilog, OpenAPI + Swagger UI |
+| **Testing** | xUnit, WebApplicationFactory, EF Core InMemory |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Browser["React SPA<br/>(Vite + Tailwind)"] -->|"fetch + JWT"| API["ASP.NET Core Web API"]
+  API -->|"EF Core"| DB[("SQL Server")]
+  API -->|"SMTP"| Mail["Mailpit (dev)<br/>provider (prod)"]
+```
+
+In development the browser talks to the Vite dev server, which proxies `/api/*`
+to the backend (sidestepping CORS and the dev HTTPS cert). In production the SPA
+would call the API cross-origin, where the API's CORS policy applies.
+
+---
+
+## Getting started
+
+### Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- A running **SQL Server** instance (local install, or Docker — see below)
-- EF Core CLI tools (for migrations):
-  ```bash
-  dotnet tool install --global dotnet-ef
-  ```
+- [Node.js 20+](https://nodejs.org) (for the frontend)
+- [Docker](https://www.docker.com) (for SQL Server and Mailpit), or a local SQL Server
+- EF Core CLI tools: `dotnet tool install --global dotnet-ef`
 
-### Running SQL Server in Docker (optional)
-
-If you don't have SQL Server locally, you can run it in a container:
+### 1. Start the supporting containers
 
 ```bash
+# SQL Server
 docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=YourStrong@Passw0rd" \
-  -p 1433:1433 -d mcr.microsoft.com/mssql/server:2022-latest
+  -p 1433:1433 -d --name todo-sqlserver mcr.microsoft.com/mssql/server:2022-latest
+
+# Mailpit (catches reset emails; web inbox at http://localhost:8025)
+docker run -d --name todo-mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit
 ```
 
-## Setup
+### 2. Configure backend secrets
 
-The database connection string is **not** stored in `appsettings.json` — it's kept
-out of source control in [.NET user secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets).
-Set yours once (replace the password with your own):
+Secrets are kept out of source control in
+[.NET user secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets):
 
 ```bash
 cd src/TodoApp.Api
+
+# Database connection (match the SA password above)
 dotnet user-secrets set "ConnectionStrings:Default" \
   "Server=localhost,1433;Database=TodoApp;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;Encrypt=True"
-```
 
-### JWT signing key
-
-Authentication uses JWTs signed with a secret key, also kept in user secrets.
-Generate a strong random key and store it (non-secret JWT settings — issuer,
-audience, expiry — live in `appsettings.json`):
-
-```bash
-cd src/TodoApp.Api
+# JWT signing key (random)
 dotnet user-secrets set "Jwt:Key" "$(openssl rand -base64 48)"
 ```
 
-### Create the database
-
-Apply the EF Core migrations to create the `TodoApp` database and its tables:
+### 3. Create the database
 
 ```bash
 dotnet ef database update --project src/TodoApp.Api
 ```
 
-## Running the app
-
-From the repository root:
+### 4. Run the backend
 
 ```bash
-# HTTP only — listens on http://localhost:5263
-dotnet run --project src/TodoApp.Api
-
-# HTTP + HTTPS — adds https://localhost:7243
+# From the repo root. Use the https profile so the frontend proxy can reach it.
 dotnet run --project src/TodoApp.Api --launch-profile https
 ```
 
-The first time you use the HTTPS profile, trust the dev certificate:
+First time only, trust the dev certificate: `dotnet dev-certs https --trust`.
+
+- API: `https://localhost:7243` (and `http://localhost:5263`)
+- Swagger UI: `https://localhost:7243/swagger` (Development only)
+
+### 5. Run the frontend
 
 ```bash
-dotnet dev-certs https --trust
+cd frontend
+npm install
+npm run dev
 ```
 
-### URLs
+Open **http://localhost:5173**. The Vite dev server proxies `/api/*` to the
+backend, so make sure the backend is running (step 4).
 
-| What | URL |
-|------|-----|
-| API base | `http://localhost:5263` / `https://localhost:7243` |
-| Swagger UI | `/swagger` (Development only) |
-| OpenAPI document | `/openapi/v1.json` |
+---
 
-> Note: there is no page at the root `/` — it's an API. Hit an endpoint like
-> `/api/todos` or open Swagger UI.
+## Using the app
 
-> **Ports:** `5263`/`7243` aren't .NET defaults — they're random ports assigned
-> to this project at scaffold time and stored in
-> `src/TodoApp.Api/Properties/launchSettings.json`. Edit that file to change them.
-> It's a dev-only convenience; in production the port comes from `ASPNETCORE_URLS`,
-> `--urls`, or a reverse proxy instead.
-
-## Authentication
-
-The API uses JWT bearer authentication. All `/api/todos` endpoints require a valid
-token, and todos are scoped per user — you only ever see your own.
-
-1. **Register** or **log in** to get a token:
-   ```bash
-   curl -k -X POST https://localhost:7243/api/auth/register \
-     -H "Content-Type: application/json" \
-     -d '{"email":"me@example.com","password":"Password123!"}'
-   # -> { "token": "eyJ...", "email": "me@example.com" }
-   ```
-2. **Send the token** on every todos request:
-   ```bash
-   curl -k https://localhost:7243/api/todos \
-     -H "Authorization: Bearer eyJ..."
-   ```
-
-### Using a token in Swagger UI
-
-1. Expand `POST /api/auth/register` (or `/login`) → **Try it out** → fill in the
-   body → **Execute**.
-2. Copy the `token` value from the response (just the long string, not the quotes).
-3. Click **Authorize** (top-right), paste the token into the **Value** field,
-   then **Authorize** → **Close**. Protected endpoints now work.
-
-> **Paste only the raw token — do _not_ prefix it with `Bearer `.** The scheme is
-> declared as `type: http, scheme: bearer`, so Swagger adds the `Bearer ` prefix
-> for you. Pasting `Bearer eyJ...` yourself produces a doubled prefix and a `401`.
-
-The token in Swagger is remembered for the page session; refreshing the page
-clears it, so you'd re-Authorize. Tokens expire after `ExpiryMinutes` (default 60),
-after which you log in again for a fresh one.
-
-### Password reset & email (Mailpit)
-
-Email is sent over SMTP (MailKit). Locally, a **Mailpit** container catches it and
-shows it in a web inbox — no real email leaves your machine. Start it once:
-
-```bash
-docker run -d --name todo-mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit
-```
-
-Then use **Forgot password** in the app and open the inbox at
-**http://localhost:8025** to click the reset link. SMTP settings live in the
-`Email` config section (dev defaults point at Mailpit: `localhost:1025`, no TLS,
-no credentials).
-
-**In production:** point the same `Email` config at one outbound mail provider your
-app uses to send (SendGrid/Mailgun/SES/SMTP): set `Host`/`Port`, `UseStartTls:
-true`, and put **your app's provider credentials** in secrets — i.e.
-`Username`/`Password` are your application's login (often `apikey` + an API key) to
-that one sending service, **not** any recipient's email account. Your app connects
-to that one provider, which then delivers to each recipient's own email host. These
-credentials can send mail as your domain, so they belong in secrets/env vars/a key
-vault — never in `appsettings.json`. The code doesn't change between dev and prod —
-only config. The reset link points at `Frontend:BaseUrl`.
+1. **Register** an account, then create and manage todos.
+2. **Forgot password?** on the login page sends a reset email — open the Mailpit
+   inbox at **http://localhost:8025** and click the link to reset.
 
 ## API endpoints
 
@@ -160,14 +143,18 @@ only config. The reset link points at `Frontend:BaseUrl`.
 | POST | `/api/todos/{id}/complete` | ✔ | Mark complete |
 | POST | `/api/todos/{id}/archive` | ✔ | Archive (soft-hide) |
 
-## Running the tests
+Protected endpoints need `Authorization: Bearer <token>`. In Swagger UI, click
+**Authorize** and paste the raw token (no `Bearer ` prefix — Swagger adds it).
+
+## Testing
 
 ```bash
 dotnet test
 ```
 
-Integration tests (xUnit) spin up the API in memory with an EF Core InMemory
-database, so they don't require a running SQL Server.
+xUnit integration tests exercise the real HTTP pipeline via `WebApplicationFactory`,
+with an EF Core InMemory database and a capturing email sender — so they need no
+running SQL Server or Mailpit.
 
 ## Project structure
 
@@ -177,14 +164,27 @@ src/TodoApp.Api/        The Web API
   Models/               EF Core entities (Todo, ApplicationUser)
   Dtos/                 Request/response contracts
   Data/                 AppDbContext (IdentityDbContext)
-  Auth/                 JWT settings, token service, Swagger bearer scheme
+  Auth/                 JWT, token/email services, Swagger bearer scheme
   Validation/           Custom validation attributes
   Migrations/           EF Core migrations
 tests/TodoApp.Api.Tests/  Integration tests
+frontend/               React + TypeScript + Tailwind SPA
+  src/lib/              API client, JWT decoding
+  src/context/          Auth context
+  src/hooks/            TanStack Query hooks
+  src/components/        Reusable UI (forms, todo item, route guard)
+  src/pages/            Login, Register, Forgot/Reset, Todos
 ```
+
+## Notes on production email
+
+Email is config-driven, so going to production is a config change, not a code
+change: point the `Email` settings at a real provider (SendGrid/Mailgun/SES/etc.),
+enable `UseStartTls`, and put the provider credentials in secrets/env vars (never
+in `appsettings.json`). The reset link points at `Frontend:BaseUrl`.
 
 ## Notes
 
-- **Logging:** structured logging via Serilog; one summary line per request to the console.
-- **Errors:** unhandled exceptions return a clean `ProblemDetails` 500; full detail is logged server-side.
 - **Times** are stored and returned in **UTC**.
+- **Archive vs. delete** are intentionally different: archive is a reversible
+  soft-hide (`IsArchived`), delete is permanent.
