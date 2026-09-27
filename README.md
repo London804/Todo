@@ -10,9 +10,10 @@ validation, structured logging, email, and integration testing.
 
 ## Screenshots
 
-> _Run the app (see below) and drop screenshots into `docs/screenshots/`, or ask
-> and I can help capture them. Suggested shots: login, the todo list, and the
-> password-reset email in Mailpit._
+<img width="1797" height="1084" alt="Pasted Graphic 2" src="https://github.com/user-attachments/assets/72a77e55-8c6f-48af-867d-85353c5aee2b" />
+<img width="1796" height="1056" alt="Pasted Graphic 3" src="https://github.com/user-attachments/assets/0d813755-0211-4a81-9f89-92095b93541e" />
+
+
 
 ## Features
 
